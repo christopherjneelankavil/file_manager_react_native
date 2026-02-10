@@ -15,9 +15,12 @@ import Header from '../components/Header';
 import Breadcrumbs from '../components/Breadcrumbs';
 import FilterBar from '../components/FilterBar';
 import FileItem from '../components/FileItem';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 const HomeScreen: React.FC = () => {
+  const { theme } = useTheme();
+  const { colors } = theme;
+
   const [currentUri, setCurrentUri] = useState<string | null>(null);
   const [files, setFiles] = useState<UsbFile[]>([]);
   const [breadcrumbs, setBreadcrumbs] = useState<Breadcrumb[]>([]);
@@ -209,7 +212,7 @@ const HomeScreen: React.FC = () => {
 
   return (
     
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <Header 
             currentUri={currentUri} 
             onPickRoot={pickUsbRoot} 
@@ -245,28 +248,38 @@ const HomeScreen: React.FC = () => {
                     )}
                     keyExtractor={item => item.uri}
                     contentContainerStyle={styles.listContent}
-                    ListEmptyComponent={<Text style={styles.emptyText}>No files found</Text>}
+                    ListEmptyComponent={
+                        <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>
+                            No files found
+                        </Text>
+                    }
                 />
 
                 {selectedFiles.size > 0 && !isCopying && (
-                    <TouchableOpacity style={styles.fab} onPress={startCopy}>
-                        <Text style={styles.fabIcon}>💾</Text>
+                    <TouchableOpacity 
+                        style={[styles.fab, { backgroundColor: colors.primary }]} 
+                        onPress={startCopy}
+                    >
+                        <Text style={[styles.fabIcon, { color: colors.text.white }]}>💾</Text>
                     </TouchableOpacity>
                 )}
 
                 {isCopying && (
-                    <View style={styles.progressPanel}>
-                        <Text style={styles.progressText}>
+                    <View style={[styles.progressPanel, { backgroundColor: colors.surface, borderTopColor: colors.border }]}>
+                        <Text style={[styles.progressText, { color: colors.text.primary }]}>
                             Copying {copyProgress.handled} of {copyProgress.total} files...
                         </Text>
-                        <Text style={styles.progressSubText} numberOfLines={1}>
+                        <Text style={[styles.progressSubText, { color: colors.text.tertiary }]} numberOfLines={1}>
                             {copyProgress.currentFile}
                         </Text>
-                        <View style={styles.progressBarBg}>
+                        <View style={[styles.progressBarBg, { backgroundColor: colors.surfaceHighlight }]}>
                              <View 
                                 style={[
                                     styles.progressBarFill, 
-                                    { width: `${(copyProgress.handled / Math.max(copyProgress.total, 1)) * 100}%` }
+                                    { 
+                                        width: `${(copyProgress.handled / Math.max(copyProgress.total, 1)) * 100}%`,
+                                        backgroundColor: colors.primary
+                                    }
                                 ]} 
                              />
                         </View>
@@ -282,15 +295,13 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   listContent: {
-    padding: 10,
+    padding: 16,
   },
   emptyText: {
     textAlign: 'center',
     marginTop: 50,
-    color: colors.text.muted,
   },
   fab: {
       position: 'absolute',
@@ -299,7 +310,6 @@ const styles = StyleSheet.create({
       width: 60,
       height: 60,
       borderRadius: 30,
-      backgroundColor: colors.primary,
       justifyContent: 'center',
       alignItems: 'center',
       elevation: 5,
@@ -316,30 +326,24 @@ const styles = StyleSheet.create({
       bottom: 0,
       left: 0,
       right: 0,
-      backgroundColor: colors.surface,
       padding: 15,
       borderTopWidth: 1,
-      borderTopColor: colors.border,
       elevation: 10,
   },
   progressText: {
       fontWeight: 'bold',
       marginBottom: 5,
-      color: colors.text.primary,
   },
   progressSubText: {
       fontSize: 12,
-      color: colors.text.tertiary,
       marginBottom: 10,
   },
   progressBarBg: {
       height: 4,
-      backgroundColor: colors.surfaceHighlight,
       borderRadius: 2,
   },
   progressBarFill: {
       height: '100%',
-      backgroundColor: colors.primary,
       borderRadius: 2,
   },
 });

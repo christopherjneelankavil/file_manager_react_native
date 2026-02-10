@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { UsbFile } from '../types';
 import { formatFileSize, formatDate, getFileIcon } from '../utils/formatting';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 interface FileItemProps {
   item: UsbFile;
@@ -13,23 +13,36 @@ interface FileItemProps {
 }
 
 const FileItem: React.FC<FileItemProps> = ({ item, isSelected, selectionMode, onPress, onLongPress }) => {
+  const { theme } = useTheme();
+  const { colors } = theme;
+
   return (
     <TouchableOpacity 
-        style={[styles.fileItem, isSelected && styles.selectedItem]} 
+        style={[
+            styles.fileItem, 
+            { backgroundColor: colors.surface, shadowColor: colors.shadow },
+            isSelected && [styles.selectedItem, { backgroundColor: colors.selection.background, borderColor: colors.selection.border }]
+        ]} 
         onPress={() => onPress(item)}
         onLongPress={() => onLongPress(item)}
     >
         <View style={styles.iconContainer}>
             <Text style={styles.icon}>{item.isDirectory ? '📁' : getFileIcon(item.name)}</Text>
             {selectionMode && (
-                <View style={styles.checkbox}>
-                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                <View style={[
+                    styles.checkbox, 
+                    { 
+                        backgroundColor: colors.surfaceHighlight, 
+                        borderColor: colors.borderLight 
+                    }
+                ]}>
+                    {isSelected && <Text style={[styles.checkmark, { color: colors.primary }]}>✓</Text>}
                 </View>
             )}
         </View>
         <View style={styles.fileDetails}>
-            <Text style={styles.fileName}>{item.name}</Text>
-            <Text style={styles.fileMeta}>
+            <Text style={[styles.fileName, { color: colors.text.primary }]}>{item.name}</Text>
+            <Text style={[styles.fileMeta, { color: colors.text.tertiary }]}>
             {item.isDirectory ? '' : formatFileSize(item.size) + ' • '}
             {formatDate(item.lastModified)}
             </Text>
@@ -42,39 +55,36 @@ const styles = StyleSheet.create({
   fileItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
-    backgroundColor: colors.surface,
+    padding: 16,
     marginBottom: 8,
-    borderRadius: 8,
-    elevation: 1,
+    borderRadius: 12,
+    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
   selectedItem: {
-      backgroundColor: colors.selection.background,
-      borderColor: colors.selection.border,
       borderWidth: 1,
   },
   iconContainer: {
-    marginRight: 15,
+    marginRight: 16,
   },
   icon: {
-    fontSize: 24,
+    fontSize: 28,
   },
   checkbox: {
       position: 'absolute',
-      top: -5,
-      right: -5,
-      width: 20,
-      height: 20,
-      borderRadius: 10,
-      backgroundColor: colors.surfaceHighlight,
+      top: -6,
+      right: -6,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
       borderWidth: 1,
-      borderColor: colors.borderLight,
       justifyContent: 'center',
       alignItems: 'center',
       zIndex: 1,
   },
   checkmark: {
-      color: colors.primary,
       fontSize: 14,
       fontWeight: 'bold',
   },
@@ -83,12 +93,11 @@ const styles = StyleSheet.create({
   },
   fileName: {
     fontSize: 16,
-    color: colors.text.primary,
+    fontWeight: '500',
     marginBottom: 4,
   },
   fileMeta: {
-    fontSize: 12,
-    color: colors.text.muted,
+    fontSize: 13,
   },
 });
 

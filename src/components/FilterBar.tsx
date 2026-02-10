@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 interface FilterBarProps {
   startDate: Date | null;
@@ -19,23 +19,38 @@ const FilterBar: React.FC<FilterBarProps> = ({
   startDate, endDate, showStartPicker, showEndPicker, isFilterActive,
   onStartPress, onEndPress, onToggleFilter, onDateChange
 }) => {
+  const { theme } = useTheme();
+  const { colors } = theme;
+
   return (
-      <View style={styles.filterContainer}>
-          <TouchableOpacity onPress={onStartPress} style={styles.dateButton}>
-             <Text style={styles.dateButtonText}>
+      <View style={[styles.filterContainer, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
+          <TouchableOpacity 
+            onPress={onStartPress} 
+            style={[styles.dateButton, { borderColor: colors.borderLight }]}
+          >
+             <Text style={[styles.dateButtonText, { color: colors.text.primary }]}>
                  Start: {startDate ? startDate.toLocaleDateString() : 'None'}
              </Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={onEndPress} style={styles.dateButton}>
-              <Text style={styles.dateButtonText}>
+          <TouchableOpacity 
+            onPress={onEndPress} 
+            style={[styles.dateButton, { borderColor: colors.borderLight }]}
+          >
+              <Text style={[styles.dateButtonText, { color: colors.text.primary }]}>
                   End: {endDate ? endDate.toLocaleDateString() : 'None'}
               </Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.applyButton, isFilterActive ? styles.activeFilter : null]}
+            style={[
+                styles.applyButton, 
+                { backgroundColor: colors.border },
+                isFilterActive && { backgroundColor: colors.success }
+            ]}
             onPress={onToggleFilter}
           >
-              <Text style={styles.applyButtonText}>{isFilterActive ? 'Clear Filter' : 'Filter'}</Text>
+              <Text style={[styles.applyButtonText, { color: colors.text.primary }]}>
+                  {isFilterActive ? 'Clear' : 'Filter'}
+              </Text>
           </TouchableOpacity>
 
           {(showStartPicker || showEndPicker) && (
@@ -54,37 +69,32 @@ const styles = StyleSheet.create({
   filterContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 10,
-    backgroundColor: colors.surface,
+    padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   dateButton: {
-    padding: 8,
+    padding: 10,
     borderWidth: 1,
-    borderColor: colors.borderLight,
-    borderRadius: 5,
+    borderRadius: 8,
     flex: 1,
-    marginRight: 5,
+    marginRight: 8,
     alignItems: 'center',
-  },
-  dateButtonText: {
-      fontSize: 12,
-      color: colors.text.primary,
-  },
-  applyButton: {
-    padding: 8,
-    backgroundColor: colors.border,
-    borderRadius: 5,
     justifyContent: 'center',
   },
-  activeFilter: {
-      backgroundColor: colors.success,
+  dateButtonText: {
+      fontSize: 13,
+  },
+  applyButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 70,
   },
   applyButtonText: {
-      fontSize: 12,
-      color: colors.text.primary,
-      fontWeight: 'bold',
+      fontSize: 13,
+      fontWeight: '600',
   },
 });
 

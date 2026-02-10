@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Breadcrumb } from '../types';
-import { colors } from '../theme/colors';
+import { useTheme } from '../theme/ThemeContext';
 
 interface BreadcrumbsProps {
   breadcrumbs: Breadcrumb[];
@@ -9,14 +9,21 @@ interface BreadcrumbsProps {
 }
 
 const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ breadcrumbs, onNavigateUp }) => {
+  const { theme } = useTheme();
+  const { colors } = theme;
+
   return (
-    <View style={styles.breadcrumbs}>
+    <View style={[styles.breadcrumbs, { backgroundColor: colors.surfaceHighlight }]}>
         <TouchableOpacity onPress={onNavigateUp} disabled={breadcrumbs.length <= 1}>
-            <Text style={[styles.breadcrumbText, breadcrumbs.length <= 1 && styles.disabledText]}>
+            <Text style={[
+                styles.breadcrumbText, 
+                { color: colors.text.link },
+                breadcrumbs.length <= 1 && { color: colors.text.disabled }
+            ]}>
                 ⬅ Back
             </Text>
         </TouchableOpacity>
-        <Text style={styles.pathText} numberOfLines={1}>
+        <Text style={[styles.pathText, { color: colors.text.secondary }]} numberOfLines={1}>
             {breadcrumbs.map(b => b.name).join(' > ')}
         </Text>
     </View>
@@ -27,21 +34,17 @@ const styles = StyleSheet.create({
   breadcrumbs: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
-    backgroundColor: colors.surfaceHighlight,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   breadcrumbText: {
     fontSize: 16,
-    color: colors.secondary,
     marginRight: 10,
-  },
-  disabledText: {
-    color: colors.text.disabled,
+    fontWeight: '500',
   },
   pathText: {
     flex: 1,
     fontSize: 14,
-    color: colors.text.secondary,
   },
 });
 
