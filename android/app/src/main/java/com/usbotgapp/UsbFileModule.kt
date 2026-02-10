@@ -7,6 +7,12 @@ import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import com.facebook.react.bridge.*
 import java.util.ArrayList
+import android.util.Log
+import com.facebook.react.modules.core.DeviceEventManagerModule
+import java.io.InputStream
+import java.io.OutputStream
+import java.io.FileNotFoundException
+import java.io.IOException
 
 class UsbFileModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext), ActivityEventListener {
 
@@ -70,6 +76,105 @@ class UsbFileModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
         } catch (e: Exception) {
             promise.reject("ERROR_LISTING_FILES", e.message)
         }
+    }
+
+    @ReactMethod
+    fun copyFiles(sourceUris: ReadableArray, targetFolderUri: String, promise: Promise) {
+        val currentActivity = getCurrentActivity()
+        if (currentActivity == null) {
+            promise.reject("ACTIVITY_NOT_FOUND", "Activity doesn't exist")
+            return
+        }
+
+        Thread {
+            try {
+                val targetUri = Uri.parse(targetFolderUri)
+                val targetDir = DocumentFile.fromTreeUri(reactApplicationContext, targetUri)
+
+                if (targetDir == null || !targetDir.exists() || !targetDir.isDirectory) {
+                    promise.reject("INVALID_TARGET", "Target is not a valid directory")
+                    return@Thread
+                }
+
+                var successCount = 0
+                val totalFiles = sourceUris.size()
+
+                for (i in 0 until totalFiles) {
+                    val sourceUriString = sourceUris.getString(i)
+                    if (sourceUriString == null) continue
+
+                    val sourceUri = Uri.parse(sourceUriString)
+                    // Get file name
+                    var sourceFile: DocumentFile? = null
+                    try {
+                        sourceFile = DocumentFile.fromSingleUri(reactApplicationContext, sourceUri)
+                    } catch (e: Exception) {
+                        // Try tree uri if single uri fails, or just proceed
+                    }
+                    
+                    val fileName = sourceFile?.name ?: "file_$i"
+                    
+                    // Emit progress
+                    sendEvent("CopyProgress", WritableNativeMap().apply {
+                        putInt("handled", i)
+                        putInt("total", totalFiles)
+                        putString("currentFile", fileName)
+                    })
+
+                    try {
+                        val input = reactApplicationContext.contentResolver.openInputStream(sourceUri)
+                        
+                        // Create destination file
+                        // Handle mime type - simpler to use */* or try to guess. 
+                        // For copy, we might need to preserve the type. 
+                        // DocumentFile.getType() can return null.
+                        val mimeType = sourceFile?.type ?: "application/octet-stream"
+                        val destFile = targetDir.createFile(mimeType, fileName)
+                        
+                        if (destFile != null && input != null) {
+                            val output = reactApplicationContext.contentResolver.openOutputStream(destFile.uri)
+                            if (output != null) {
+                                input.use { ignored ->
+                                    output.use { ignored ->
+                                        copyStream(input, output)
+                                    }
+                                }
+                                successCount++
+                            } else {
+                                input.close()
+                                // Failed to open output
+                            }
+                        } else {
+                            input?.close()
+                            // Failed to create file
+                        }
+
+                    } catch (e: Exception) {
+                        Log.e("UsbFileModule", "Error copying file $fileName", e)
+                        // Continue to next file
+                    }
+                }
+
+                promise.resolve(successCount)
+
+            } catch (e: Exception) {
+                promise.reject("COPY_ERROR", e.message)
+            }
+        }.start()
+    }
+
+    private fun copyStream(input: java.io.InputStream, output: java.io.OutputStream) {
+        val buffer = ByteArray(8 * 1024)
+        var bytesRead: Int
+        while (input.read(buffer).also { bytesRead = it } != -1) {
+            output.write(buffer, 0, bytesRead)
+        }
+    }
+
+    private fun sendEvent(eventName: String, params: WritableMap?) {
+        reactApplicationContext
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+            .emit(eventName, params)
     }
 
     override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {

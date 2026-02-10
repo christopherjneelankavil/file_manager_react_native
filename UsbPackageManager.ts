@@ -14,6 +14,7 @@ export interface UsbFile {
 interface UsbFileModuleType {
   openDocumentTree(): Promise<string>;
   listFiles(uri: string): Promise<UsbFile[]>;
+  copyFiles(sourceUris: string[], targetFolderUri: string): Promise<number>;
 }
 
 export default UsbFileModule as UsbFileModuleType;

@@ -12,6 +12,7 @@ import {
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import UsbFileModule, {UsbFile} from './UsbPackageManager';
+import { DeviceEventEmitter } from 'react-native';
 
 function App(): React.JSX.Element {
   const [currentUri, setCurrentUri] = useState<string | null>(null);
@@ -24,6 +25,21 @@ function App(): React.JSX.Element {
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
   const [isFilterActive, setIsFilterActive] = useState(false);
+  
+  // Selection & Copy State
+  const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
+  const [copyProgress, setCopyProgress] = useState({ handled: 0, total: 0, currentFile: '' });
+
+  useEffect(() => {
+    const subscription = DeviceEventEmitter.addListener('CopyProgress', (event) => {
+        setCopyProgress(event);
+    });
+    return () => {
+        subscription.remove();
+    };
+  }, []);
 
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -44,6 +60,9 @@ function App(): React.JSX.Element {
         setCurrentUri(uri);
         setBreadcrumbs([{name: 'Root', uri: uri}]);
         loadFiles(uri);
+        // Reset selection when changing root
+        setSelectionMode(false);
+        setSelectedFiles(new Set());
       }
     } catch (e: any) {
         if(e.code !== 'CANCELED') {
@@ -61,14 +80,86 @@ function App(): React.JSX.Element {
     }
   };
 
+  const toggleSelection = (uri: string) => {
+      const newSelection = new Set(selectedFiles);
+      if (newSelection.has(uri)) {
+          newSelection.delete(uri);
+      } else {
+          newSelection.add(uri);
+      }
+      setSelectedFiles(newSelection);
+      
+      if (newSelection.size === 0) {
+          setSelectionMode(false);
+      }
+  };
+
   const onFilePress = (file: UsbFile) => {
+    if (selectionMode) {
+        toggleSelection(file.uri);
+        return;
+    }
+
     if (file.isDirectory) {
       setCurrentUri(file.uri);
       setBreadcrumbs([...breadcrumbs, {name: file.name, uri: file.uri}]);
       loadFiles(file.uri);
+      // Reset selection when navigating
+      setSelectionMode(false);
+      setSelectedFiles(new Set());
     } else {
       Alert.alert('File', `Name: ${file.name}\nSize: ${formatFileSize(file.size)}\nType: ${file.type}`);
     }
+  };
+
+  const onFileLongPress = (file: UsbFile) => {
+      if (!selectionMode) {
+          setSelectionMode(true);
+          const newSelection = new Set<string>();
+          newSelection.add(file.uri);
+          setSelectedFiles(newSelection);
+      } else {
+          toggleSelection(file.uri);
+      }
+  };
+
+  const selectAll = () => {
+      const newSelection = new Set<string>();
+      filteredFiles.forEach(file => {
+          if (!file.isDirectory) {
+              newSelection.add(file.uri);
+          }
+      });
+      setSelectedFiles(newSelection);
+      if (newSelection.size > 0) setSelectionMode(true);
+  };
+
+  const startCopy = async () => {
+      if (selectedFiles.size === 0) return;
+
+      try {
+          const targetFolderUri = await UsbFileModule.openDocumentTree();
+          if (targetFolderUri) {
+              setIsCopying(true);
+              const filesToCopy = Array.from(selectedFiles);
+              
+              try {
+                  const count = await UsbFileModule.copyFiles(filesToCopy, targetFolderUri);
+                  Alert.alert("Success", `Successfully copied ${count} files.`);
+                  setSelectionMode(false);
+                  setSelectedFiles(new Set());
+              } catch (e: any) {
+                  Alert.alert("Copy Failed", e.message);
+              } finally {
+                  setIsCopying(false);
+                  setCopyProgress({ handled: 0, total: 0, currentFile: '' });
+              }
+          }
+      } catch (e: any) {
+          if (e.code !== 'CANCELED') {
+              Alert.alert("Error", "Failed to select destination: " + e.message);
+          }
+      }
   };
 
   const navigateUp = () => {
@@ -104,20 +195,32 @@ function App(): React.JSX.Element {
     });
   }, [files, isFilterActive, startDate, endDate]);
 
-  const renderFileItem = ({item}: {item: UsbFile}) => (
-    <TouchableOpacity style={styles.fileItem} onPress={() => onFilePress(item)}>
-      <View style={styles.iconContainer}>
-        <Text style={styles.icon}>{item.isDirectory ? '📁' : getFileIcon(item.name)}</Text>
-      </View>
-      <View style={styles.fileDetails}>
-        <Text style={styles.fileName}>{item.name}</Text>
-        <Text style={styles.fileMeta}>
-          {item.isDirectory ? '' : formatFileSize(item.size) + ' • '}
-          {formatDate(item.lastModified)}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderFileItem = ({item}: {item: UsbFile}) => {
+    const isSelected = selectedFiles.has(item.uri);
+    return (
+        <TouchableOpacity 
+            style={[styles.fileItem, isSelected && styles.selectedItem]} 
+            onPress={() => onFilePress(item)}
+            onLongPress={() => onFileLongPress(item)}
+        >
+        <View style={styles.iconContainer}>
+            <Text style={styles.icon}>{item.isDirectory ? '📁' : getFileIcon(item.name)}</Text>
+            {selectionMode && (
+                <View style={styles.checkbox}>
+                    {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+            )}
+        </View>
+        <View style={styles.fileDetails}>
+            <Text style={styles.fileName}>{item.name}</Text>
+            <Text style={styles.fileMeta}>
+            {item.isDirectory ? '' : formatFileSize(item.size) + ' • '}
+            {formatDate(item.lastModified)}
+            </Text>
+        </View>
+        </TouchableOpacity>
+    );
+  };
 
   const getFileIcon = (name: string) => {
     const ext = name.split('.').pop()?.toLowerCase();
@@ -179,6 +282,13 @@ function App(): React.JSX.Element {
                     <Text style={styles.selectButtonText}>Select USB Root</Text>
                 </TouchableOpacity>
             )}
+            {currentUri && (
+                <View style={styles.headerActions}>
+                     <TouchableOpacity onPress={selectAll} style={styles.headerButton}>
+                         <Text style={styles.headerButtonText}>Select All</Text>
+                     </TouchableOpacity>
+                </View>
+            )}
         </View>
 
         {currentUri && (
@@ -203,6 +313,31 @@ function App(): React.JSX.Element {
                     contentContainerStyle={styles.listContent}
                     ListEmptyComponent={<Text style={styles.emptyText}>No files found</Text>}
                 />
+
+                {selectedFiles.size > 0 && !isCopying && (
+                    <TouchableOpacity style={styles.fab} onPress={startCopy}>
+                        <Text style={styles.fabIcon}>💾</Text>
+                    </TouchableOpacity>
+                )}
+
+                {isCopying && (
+                    <View style={styles.progressPanel}>
+                        <Text style={styles.progressText}>
+                            Copying {copyProgress.handled} of {copyProgress.total} files...
+                        </Text>
+                        <Text style={styles.progressSubText} numberOfLines={1}>
+                            {copyProgress.currentFile}
+                        </Text>
+                        <View style={styles.progressBarBg}>
+                             <View 
+                                style={[
+                                    styles.progressBarFill, 
+                                    { width: `${(copyProgress.handled / Math.max(copyProgress.total, 1)) * 100}%` }
+                                ]} 
+                             />
+                        </View>
+                    </View>
+                )}
             </>
         )}
       </SafeAreaView>
@@ -326,6 +461,91 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 50,
     color: '#888',
+  },
+  selectedItem: {
+      backgroundColor: '#e6f7ff',
+      borderColor: '#1890ff',
+      borderWidth: 1,
+  },
+  checkbox: {
+      position: 'absolute',
+      top: -5,
+      right: -5,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: '#eee',
+      borderWidth: 1,
+      borderColor: '#ccc',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 1,
+  },
+  checkmark: {
+      color: '#2196F3',
+      fontSize: 14,
+      fontWeight: 'bold',
+  },
+  headerActions: {
+      flexDirection: 'row',
+      marginTop: 10,
+  },
+  headerButton: {
+      padding: 5,
+  },
+  headerButtonText: {
+      color: '#007AFF',
+      fontWeight: 'bold',
+  },
+  fab: {
+      position: 'absolute',
+      bottom: 30,
+      right: 30,
+      width: 60,
+      height: 60,
+      borderRadius: 30,
+      backgroundColor: '#2196F3',
+      justifyContent: 'center',
+      alignItems: 'center',
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+  },
+  fabIcon: {
+      fontSize: 30,
+  },
+  progressPanel: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: '#fff',
+      padding: 15,
+      borderTopWidth: 1,
+      borderTopColor: '#ddd',
+      elevation: 10,
+  },
+  progressText: {
+      fontWeight: 'bold',
+      marginBottom: 5,
+      color: '#333',
+  },
+  progressSubText: {
+      fontSize: 12,
+      color: '#666',
+      marginBottom: 10,
+  },
+  progressBarBg: {
+      height: 4,
+      backgroundColor: '#eee',
+      borderRadius: 2,
+  },
+  progressBarFill: {
+      height: '100%',
+      backgroundColor: '#2196F3',
+      borderRadius: 2,
   },
 });
 
